@@ -120,9 +120,9 @@ class Encoder(nn.Module):
 
         # Change model to GPU
         if use_cuda:
-            conv_layers = conv_layers.cuda()
-            fc_y = fc_y.cuda()
-            fc_z = fc_z.cuda()
+            self.conv_layers = self.conv_layers.cuda()
+            self.fc_y = self.fc_y.cuda()
+            self.fc_z = self.fc_z.cuda()
 
     def forward(self, x):
         conv_out = self.conv_layers(x)
@@ -164,7 +164,7 @@ class Decoder(nn.Module):
 
         if use_cuda:
             self.conv_layers = self.conv_layers.cuda()
-            self.fc_in = self.conv_layers.cuda()
+            self.fc_in = self.fc_in.cuda()
         
     def forward(self, yz):
         fc_out = self.fc_in(yz).view((yz.size()[0],*self.conv_input_shape))
