@@ -2,41 +2,29 @@
   <img width="300" height="80" src="./figures/full_logo.png">
 </p>
 
-# Cycle-StarNet
+# StarNet-AE
 
 ## Dependencies
 
 -[PyTorch](http://pytorch.org/): `pip install torch torchvision`
 
--[The Payne](https://github.com/tingyuansen/The_Payne): `pip install The_Payne`
-
 -h5py: `pip install h5py`
-
--scikit-learn: `pip install -U scikit-learn`
 
 ## Generative and Interpretable Deep Learning for Stellar Spectra
 
 
-This project aims to bridge the gap between two different sets of stellar spectra. Although the underlying physics that produces the two sets may be the same, the data can visually appear very different for a variety of reasons. Cycle-StarNet is meant to determine the commonalities between two sets of spectra (ie. the physical parameters) and learn how to transform one set of data into the other. Check out the [technical write-up](./docs/README.md), which explains the method in detail; dicusses the training process; provides insight into issues that may arise when transferring the method to other datasets (as well tricks to fix these issue); and shows some applications of the Cycle-StarNet.
-
-<p align="center">
-  <img width="400" height="300" src="./figures/diagram.png">     
-  <img width="350" height="550" src="./figures/Architecture.png"> 
-</p>                               
-                                     
-    
-<p align="center"><b>Figure 1</b>: Overview of the proposed method (left) and a simplified diagram of the Cycle-StarNet Architecture (right).<p align="center"> 
+This project aims to bridge the gap between two different sets of stellar spectra. Although the underlying physics that produces the two sets may be the same, the data can visually appear very different for a variety of reasons. StarNet-AE is meant to utilize the commonalities between two sets of spectra (ie. the physical parameters) while maintaining the freedom to account for additional information found in one of the sets and not the other.
                                    
-
-<p align="center">
-  <img width="900" height="300" src="./figures/synth_to_obs.png">
-</p>
-
-<p align="center"><b>Figure 2</b>: Examples of two spectra (taken from our New Lines Project) from opposite domains that have the same stellar parameters. When mapping the synthetic spectrum (which has an incomplete line list) to the observed domain, the resulting spectrum is a much better fit to the observed spectrum and the missing information is now present in the transferred spectrum.<p align="center"> 
-
-
 ## Getting Started ##
 
-Before beginning training or utilizing the Cycle-StarNet, I recommend reading the [technical write-up](./docs/README.md) on the method.
+1. Download the original Payne training set (mock_all_spectra_no_noise_resample_prior_large.npz) from [here](https://www.canfar.net/storage/list/starnet/public/new_lines_project) and place it in the [data directory](../data/).
+    
+  2. The model architecture and hyper-parameters are set within configuration file in [the config directory](../configs). For instance, I have already created the [base line configuration file](../configs/ae_1.ini). If creating a new model, I suggest copying this one and changing the parameters
+  
+  5. Using this model as my example, from the main SN_autoenc directory, you can run `python train_synth_ae.py ae_1 -v 1000 -ct 15` which will train your model displaying the progress every 1000 batch iterations and saves the model every 15 minutes. This same command will continue training the network if you already have the model saved in the [model directory](../models) from previous training. (Note that the training takes approximately 3 hours on GPU). Alternatively, if operating on compute-canada see [this script](../scripts/ae_1.sh) for the training. It allows faster data loading throughout training.
+  
+  6. The [Analysis notebook](./Evaluate_synth.ipynb) takes you through the steps of analyzing the StarNet-Autoencoder to ensure that the model can operate on the synthetic dataset correctly.
+  
+## Still to come ##
 
-To get started with our New Lines Project, take a look [here](./new_lines_project/).
+Training on the observed dataset using the synthetic model as the pre-trained weights.
