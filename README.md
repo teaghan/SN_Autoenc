@@ -10,7 +10,7 @@
 
 -h5py: `pip install h5py`
 
-## Generative and Interpretable Deep Learning for Stellar Spectra
+## Transfer Learning for Stellar Spectra
 
 
 This project aims to bridge the gap between two different sets of stellar spectra. Although the underlying physics that produces the two sets may be the same, the data can visually appear very different for a variety of reasons. StarNet-AE is meant to utilize the commonalities between two sets of spectra (ie. the physical parameters) while maintaining the freedom to account for additional information found in one of the sets and not the other.
