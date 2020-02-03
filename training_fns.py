@@ -257,3 +257,90 @@ def train_synth_iter(synth_ae, synth_train_batch, x_loss_fn, y_loss_fn,
     losses_cp['dxdy_synth'].append(loss_grads_synth.data.item())
 
     return losses_cp
+
+def evaluate_dxdy_and_dydx(synth_ae, obs_ae, synth_train_batch, x_mean, x_std, 
+                           dy_batch, J_mean_batch, J_std_batch,  use_cuda):
+
+    # Repeat labels into matrix
+    y_ref = torch.cat(synth_train_batch['y'].size(1)*[synth_train_batch['y'].clone()])
+    # Apply + an - deviations 
+    y_pos = y_ref.clone()+dy_batch
+    y_neg = y_ref.clone()-dy_batch
+
+    # Produce x_synth using the emulator for + and - 
+    x_pos = synth_ae.run_emulator(y_pos)
+    x_neg = synth_ae.run_emulator(y_neg)
+
+    # Normalize the spectra
+    x_pos = (x_pos - x_mean) / x_std
+    x_neg = (x_neg - x_mean) / x_std
+    
+    # Only select last 7167 pixels
+    x_pos = x_pos[:,47:]
+    x_neg = x_neg[:,47:]
+    
+    # Calculate the Jacobian for the emulator
+    J_tgt = x_pos - x_neg
+    
+    # Produce x_obs using the decoder for + and -
+    x_pos = obs_ae.yz_to_xsynth(y_pos)
+    x_neg = obs_ae.yz_to_xsynth(y_neg)
+    
+    # Calculate Jacobian for the decoder
+    J_dec = x_pos - x_neg
+    
+    # Normalize to give each label equal weighting
+    J_tgt = (J_tgt - J_mean_batch)/J_std_batch
+    J_dec = (J_dec - J_mean_batch)/J_std_batch
+
+    j_loss = torch.mean((J_tgt.detach()-J_dec)**2)
+    
+    return j_loss
+
+def train_obs_iter(synth_ae, obs_ae, synth_train_batch, obs_train_batch, x_loss_fn, 
+                   loss_weight_x, loss_weight_j, optimizer, lr_scheduler, losses_cp, 
+                   cur_iter, x_mean, x_std, dy_batch, J_mean_batch, J_std_batch, use_cuda,
+                   rec_grads):
+    
+    # RUN MODEL
+    
+    obs_ae.train_mode()
+    synth_ae.eval_mode()
+    # Encoding
+    y_obs, z_obs = obs_ae.x_to_yz(obs_train_batch['x'].detach())
+    # Decoding
+    x_obsobs = obs_ae.yz_to_xobs(y_obs, z_obs)
+
+    # EVALUATE LOSSES
+    
+    # x to x
+    xobs_loss = x_loss_fn(pred=x_obsobs, 
+                            target=obs_train_batch['x'], 
+                            error=obs_train_batch['x_err'], 
+                            mask=obs_train_batch['x_msk'])
+    
+    # Evaluate the dx/dy Jacobians and compare them to the the Jacobian produced by the emulator
+    if rec_grads:
+        loss_grads_obs = evaluate_dxdy_and_dydx(synth_ae, obs_ae, synth_train_batch, 
+                                                x_mean, x_std, dy_batch, J_mean_batch, 
+                                                J_std_batch,  use_cuda)
+    else:
+        loss_grads_obs = torch.tensor(np.array([0]).astype(np.float32))
+    
+    # Combine losses with appropriate loss weights
+    loss_total = (loss_weight_x * xobs_loss +
+                  loss_weight_j * loss_grads_obs)
+
+    # Back propogate
+    optimizer.zero_grad()
+    loss_total.backward()
+    # Adjust network weights
+    optimizer.step()    
+    # Adjust learning rate
+    lr_scheduler.step()
+
+    # Save losses
+    losses_cp['x_obs'].append(xobs_loss.data.item())
+    losses_cp['dxdy_obs'].append(loss_grads_obs.data.item())
+
+    return losses_cp
