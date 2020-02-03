@@ -247,6 +247,12 @@ def train_network(cur_iter):
 
         if cur_iter>total_synth_batch_iters:
             break
+    torch.save({'batch_iters': cur_iter,
+                'losses': losses,
+                'optimizer' : optimizer.state_dict(),
+                'lr_scheduler' : lr_scheduler.state_dict(),
+                'synth_ae' : synth_ae.state_dict()}, 
+               model_filename)
     
 # Run the training
 if __name__=="__main__":
