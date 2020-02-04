@@ -232,7 +232,10 @@ class SN_AE(nn.Module):
             y = (y - self.y_min)/(self.y_max-self.y_min) - 0.5
         return self.decoder(torch.cat((y, z), 1)).squeeze(1)
     
-    def yz_to_xobs(self, y, z):
+    def yz_to_xobs(self, y, z, raw_labels=False):
+        if raw_labels:
+            # Normalize labels
+            y = (y - self.y_min)/(self.y_max-self.y_min) - 0.5
         return self.decoder(torch.cat((y, z), 1)).squeeze(1)
         
     def train_mode(self):

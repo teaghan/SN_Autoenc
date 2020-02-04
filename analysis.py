@@ -52,6 +52,41 @@ def plot_progress_synth(losses, y_lims=[(0,0.05),(0,15),(0,0.13)], savename=None
         plt.savefig(savename)
         
     plt.show()
+    
+def plot_progress_obs(losses, y_lims=[(0,0.05),(0,15),(0,0.13)], savename=None):
+    
+    fig = plt.figure(figsize=(18,9))
+
+    gs = gridspec.GridSpec(2, 2)
+
+    ax1 = plt.subplot(gs[0])
+    ax2 = plt.subplot(gs[1])
+    ax3 = plt.subplot(gs[2])
+
+    ax1.set_title('Reconstruction Losses', fontsize=30)
+    ax3.set_title('Jacobian Losses', fontsize=30)
+
+    ax1.plot(losses['batch_iters'], losses['x_obs'],
+             label=r'$x=Dec(Enc(x))$')
+    ax1.set_ylabel('Loss',fontsize=25)
+    ax1.set_ylim(*y_lims[0])
+    
+    ax3.plot(losses['batch_iters'], losses['dxdy_obs'],
+             label=r'$\frac{\partial \mathcal{X}_{obs\rightarrow synth}}{\partial y_i}$')
+    ax3.set_ylim(*y_lims[2])
+
+    for i, ax in enumerate([ax1, ax3]):
+        ax.set_xlabel('Batch Iterations',fontsize=25)
+        ax.tick_params(labelsize=20)
+        ax.legend(fontsize=22, ncol=2)
+        ax.grid(True)
+
+    plt.tight_layout()
+    
+    if savename is not None:
+        plt.savefig(savename)
+        
+    plt.show()
 
 def run_tsne(data_a, data_b, perplex):
     from tsne import bh_sne
@@ -234,7 +269,6 @@ def plot_compare_estimates_resid_obs(x_data, y_data, snr, savename=None,
 def plot_compare_estimates_resid_synth(x_data, y_data, savename=None, 
                            x_lab=r'$ASPCAP \ \ \ DR14$', 
                            y_lab=r'$(SN\ Cycle$-$GAN) - DR14$',
-                           snr_max=200, cmap='Blues', snr_cutoff=100,
                            resid_lims = [[-1000., 1000.], [-2, 2], [-1, 1], 
                              [-1., 1.], [-1., 1.], [-1., 1.]]):
     plt.rcParams['axes.facecolor']='white'

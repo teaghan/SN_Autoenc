@@ -85,7 +85,7 @@ print('\nBuilding networks...')
 synth_ae = SN_AE(architecture_config, emulator_fn, use_cuda=use_cuda)
 
 # Display model architectures
-print('\n\nSYNTHETIC EMULATOR ARCHITECTURE:\n')
+print('\n\nEMULATOR ARCHITECTURE:\n')
 print(synth_ae.emulator)
 print('\n\nENCODER ARCHITECTURE:\n')
 print(synth_ae.encoder)
