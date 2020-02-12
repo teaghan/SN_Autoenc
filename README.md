@@ -28,7 +28,3 @@ This project aims to bridge the gap between two different sets of stellar spectr
   5. Next, you can train the observed auto-encoder: from the main SN_autoenc directory, you can run `python train_obs_ae.py ae_1 -v 1000 -ct 15` which will train your model.
   
   6. Similarly, there is an [Analysis notebook](./Evaluate_synth.ipynb) takes you through the steps of analyzing the observed StarNet-Autoencoder.
-  
-## Still to come ##
-
-Training on the observed dataset using the synthetic model as the pre-trained weights.
