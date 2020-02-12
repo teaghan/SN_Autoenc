@@ -6,36 +6,6 @@ from torch.autograd import Variable
 from distutils import util
 import numpy as np
 
-'''
-def build_emulator(dim_in=25, num_neurons=300, num_pixel=7214, emulator_coeffs=None, use_cuda=True):
-    # Create layers
-    model = torch.nn.Sequential(torch.nn.Linear(dim_in, num_neurons),
-                                torch.nn.Sigmoid(),
-                                torch.nn.Linear(num_neurons, num_neurons),
-                                torch.nn.Sigmoid(),
-                                torch.nn.Linear(num_neurons, num_pixel))
-    # Assign pre-trained weights
-    if emulator_coeffs is not None:
-        w_array_0, w_array_1, w_array_2, b_array_0, b_array_1, b_array_2, y_min, y_max = emulator_coeffs
-        y_min = torch.Tensor(y_min.astype(np.float32))
-        y_max = torch.Tensor(y_max.astype(np.float32))
-        
-        for param, weights in zip(model.parameters(), 
-                                  [w_array_0, b_array_0, w_array_1, b_array_1, w_array_2, b_array_2]):
-            param.data =  Variable(torch.from_numpy(weights)).type(torch.FloatTensor)
-            
-        if use_cuda:
-            model = model.cuda()
-            y_min = y_min.cuda()
-            y_max = y_max.cuda()
-            
-        return model, y_min, y_max
-    
-    else:
-        if use_cuda:
-            model = model.cuda()
-        return model
-'''    
 def build_emulator(model_fn, dim_in=25, num_neurons=300, num_pixel=7214, use_cuda=True):
     
     # Create layers
@@ -90,7 +60,7 @@ def same_padding(input_pixels, filter_len, stride=1):
 class Encoder(nn.Module):
 
     def __init__(self, num_pixels, num_y, num_z, conv_filts, 
-                 conv_strides, conv_filt_lens, activ_fn,
+                 conv_strides, conv_filt_lens, activ_fn, spectral_norm,
                  init=True, use_cuda=True):
                 
         super(Encoder, self).__init__()
@@ -98,8 +68,11 @@ class Encoder(nn.Module):
         # Build conv layers
         layers = []
         input_filts = 1
-        for filts, strides, filter_length in zip(conv_filts, conv_strides, conv_filt_lens):   
-            layers.append(nn.Conv1d(input_filts, filts, filter_length, strides))
+        for filts, strides, filter_length in zip(conv_filts, conv_strides, conv_filt_lens): 
+            if spectral_norm:
+                layers.append(nn.utils.spectral_norm(nn.Conv1d(input_filts, filts, filter_length, strides)))
+            else:
+                layers.append(nn.Conv1d(input_filts, filts, filter_length, strides))
             layers.append(activ_fn)
             input_filts = filts
         self.conv_layers = torch.nn.Sequential(*layers)
@@ -132,7 +105,7 @@ class Encoder(nn.Module):
 class Decoder(nn.Module):
 
     def __init__(self, conv_input_shape, num_pixels, num_y, num_z, conv_filts, 
-                 conv_strides, conv_filt_lens, activ_fn,
+                 conv_strides, conv_filt_lens, activ_fn, spectral_norm,
                  init=True, use_cuda=True):
                 
         super(Decoder, self).__init__()
@@ -148,13 +121,22 @@ class Decoder(nn.Module):
         input_filts = self.conv_input_shape[0]
         for filts, strides, filter_length in zip(reversed(conv_filts), reversed(conv_strides), reversed(conv_filt_lens)):
             if strides>1:
-                layers.append(nn.ConvTranspose1d(input_filts, filts, filter_length, strides))
+                if spectral_norm:
+                    layers.append(nn.utils.spectral_norm(nn.ConvTranspose1d(input_filts, filts, filter_length, strides)))
+                else:
+                    layers.append(nn.ConvTranspose1d(input_filts, filts, filter_length, strides))
             else:      
-                layers.append(nn.Conv1d(input_filts, filts, filter_length, strides))
+                if spectral_norm:
+                    layers.append(nn.utils.spectral_norm(nn.Conv1d(input_filts, filts, filter_length, strides)))
+                else:
+                    layers.append(nn.Conv1d(input_filts, filts, filter_length, strides))
             layers.append(activ_fn)
             input_filts = filts
         # Spectrum output
-        layers.append(nn.Conv1d(input_filts, 1, 1, 1))
+        if spectral_norm:
+            layers.append(nn.utils.spectral_norm(nn.Conv1d(input_filts, 1, 1, 1)))
+        else:
+            layers.append(nn.Conv1d(input_filts, 1, 1, 1))
         self.conv_layers = torch.nn.Sequential(*layers)
 
         if init:
@@ -184,6 +166,7 @@ class SN_AE(nn.Module):
         conv_strides = eval(architecture_config['conv_strides'])
         self.num_y = int(architecture_config['num_y'])
         self.num_z = int(architecture_config['num_z'])
+        spectral_norm = bool(util.strtobool(architecture_config['spectral_norm']))
         
         # Create emulator
         (self.emulator, self.y_min, self.y_max) = build_emulator(model_fn=emulator_fn, 
@@ -202,6 +185,7 @@ class SN_AE(nn.Module):
                                self.num_y, self.num_z,
                                conv_filts, conv_strides, 
                                conv_filt_lens, activ_fn, 
+                               spectral_norm,
                                init=True, use_cuda=use_cuda)
         
         # Build decoding network    
@@ -210,6 +194,7 @@ class SN_AE(nn.Module):
                                self.num_y, self.num_z,
                                conv_filts, conv_strides, 
                                conv_filt_lens, activ_fn, 
+                               spectral_norm,
                                init=True, use_cuda=use_cuda)
         
         if use_cuda:

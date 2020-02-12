@@ -148,6 +148,7 @@ class PayneObservedDataset(Dataset):
                     x_msk = torch.from_numpy(np.ones(x.shape).astype(np.float32))
                 if return_labels:
                     y = torch.from_numpy(F_obs[self.obs_domain + ' labels ' + dataset][idx].astype(np.float32)) 
+                    
             # Normalize the spectra
             x = (x - self.x_mean) / self.x_std
             
@@ -160,7 +161,7 @@ class PayneObservedDataset(Dataset):
             return {'x':x, 'x_err':x_err, 'x_msk':x_msk} 
         
 def evaluate_dxdy(synth_ae, synth_train_batch, x_mean, x_std, 
-                  dy_batch, J_mean_batch, J_std_batch,  use_cuda):
+                  dy_batch, dxdy_mean_batch, dxdy_std_batch,  use_cuda):
 
     # Repeat labels into matrix
     y_ref = torch.cat(synth_train_batch['y'].size(1)*[synth_train_batch['y'].clone()])
@@ -191,8 +192,8 @@ def evaluate_dxdy(synth_ae, synth_train_batch, x_mean, x_std,
     J_dec = x_pos - x_neg
     
     # Normalize to give each label equal weighting
-    J_tgt = (J_tgt - J_mean_batch)/J_std_batch
-    J_dec = (J_dec - J_mean_batch)/J_std_batch
+    J_tgt = (J_tgt - dxdy_mean_batch)/dxdy_std_batch
+    J_dec = (J_dec - dxdy_mean_batch)/dxdy_std_batch
 
     j_loss = torch.mean((J_tgt.detach()-J_dec)**2)
     
@@ -201,7 +202,7 @@ def evaluate_dxdy(synth_ae, synth_train_batch, x_mean, x_std,
 def train_synth_iter(synth_ae, synth_train_batch, x_loss_fn, y_loss_fn, 
                      loss_weight_x, loss_weight_y, loss_weight_j, 
                      optimizer, lr_scheduler, losses_cp, cur_iter, 
-                     x_mean, x_std, dy_batch, J_mean_batch, J_std_batch, use_cuda,
+                     x_mean, x_std, dy_batch, dxdy_mean_batch, dxdy_std_batch, use_cuda,
                     rec_grads):
     
     # RUN MODEL
@@ -232,7 +233,7 @@ def train_synth_iter(synth_ae, synth_train_batch, x_loss_fn, y_loss_fn,
     # Evaluate the dx/dy Jacobians and compare them to the the Jacobian produced by the emulator
     if rec_grads:
         loss_grads_synth = evaluate_dxdy(synth_ae, synth_train_batch, x_mean, x_std, 
-                                         dy_batch, J_mean_batch, J_std_batch,  use_cuda)
+                                         dy_batch, dxdy_mean_batch, dxdy_std_batch,  use_cuda)
     else:
         loss_grads_synth = torch.tensor(np.array([0]).astype(np.float32))
     
@@ -257,9 +258,77 @@ def train_synth_iter(synth_ae, synth_train_batch, x_loss_fn, y_loss_fn,
     losses_cp['dxdy_synth'].append(loss_grads_synth.data.item())
 
     return losses_cp
+'''
+def compute_dydx_jacobian(ae, x, num_y=25):
+    # Batchsize
+    b = x.shape[0]
+    # Shape of spectra
+    x_shape = x.shape[1:]
+    # Add dimension
+    x = x.unsqueeze(1)
+    # Repeat spectrum along new axis for each label 
+    x = x.repeat(1, num_y, *(1,)*len(x.shape[2:]))
+    x.requires_grad_(True)
+    tmp_shape = x.shape
+    # Forward pass
+    y, z = ae.x_to_yz(x.reshape(-1, *tmp_shape[2:]))
+    y_shape = y.shape[1:]
+    y = y.reshape(b, num_y, num_y)
+    # Create a unit vector for each label
+    input_val = torch.eye(num_y).reshape(1, num_y, num_y).repeat(b, 1, 1)
+    # Backward pass
+    y.backward(input_val)
+    # Return jacobian
+    return x.grad.reshape(b, *y_shape, *x_shape)
 
-def evaluate_dxdy_and_dydx(synth_ae, obs_ae, synth_train_batch, x_mean, x_std, 
-                           dy_batch, J_mean_batch, J_std_batch,  use_cuda):
+I don't think the above fcn is differentiable, might need to try:
+'''
+
+def compute_dydx_jacobian(ae, x, num_y=25):
+    # Batchsize
+    b = x.shape[0]
+    # Shape of spectra
+    x_shape = x.shape[1:]
+    # Add dimension
+    x = x.unsqueeze(1)
+    # Repeat spectrum along new axis for each label 
+    x = x.repeat(1, num_y, *(1,)*len(x.shape[2:]))
+    x.requires_grad_(True)
+    tmp_shape = x.shape
+    # Forward pass
+    y, _ = ae.x_to_yz(x.reshape(-1, *tmp_shape[2:]))
+    y_shape = y.shape[1:]
+    y = y.reshape(b, num_y, num_y)
+    # Create a unit vector for each label
+    input_val = torch.eye(num_y).reshape(1, num_y, num_y).repeat(b, 1, 1)
+    
+    # Backward pass
+    jacobian = torch.autograd.grad(y, x,
+                                   grad_outputs=input_val,
+                                   retain_graph=True,
+                                   create_graph=True,
+                                   allow_unused=True)[0].requires_grad_()
+    
+    # Return jacobian
+    return jacobian.reshape(b, *y_shape, *x_shape)
+
+def evaluate_dydx_obs(synth_ae, obs_ae, synth_train_batch, x_mean, x_std, 
+                       dydx_mean, dydx_std, use_cuda):
+    
+    # Calculate the dy/dx Jacobians
+    J_tgt = compute_dydx_jacobian(synth_ae, synth_train_batch['x'].detach())
+    J_enc = compute_dydx_jacobian(obs_ae, synth_train_batch['x'].detach())
+        
+    # Normalize to give each label equal weighting
+    J_tgt = (J_tgt - dydx_mean)/dydx_std
+    J_enc = (J_enc - dydx_mean)/dydx_std
+
+    j_loss = torch.mean((J_tgt.detach()-J_enc)**2)
+    
+    return j_loss
+
+def evaluate_dxdy_obs(synth_ae, obs_ae, synth_train_batch, x_mean, x_std, 
+                           dy_batch, dxdy_mean_batch, dxdy_std_batch,  use_cuda):
 
     # Repeat labels into matrix
     y_ref = torch.cat(synth_train_batch['y'].size(1)*[synth_train_batch['y'].clone()])
@@ -290,8 +359,8 @@ def evaluate_dxdy_and_dydx(synth_ae, obs_ae, synth_train_batch, x_mean, x_std,
     J_dec = x_pos - x_neg
     
     # Normalize to give each label equal weighting
-    J_tgt = (J_tgt - J_mean_batch)/J_std_batch
-    J_dec = (J_dec - J_mean_batch)/J_std_batch
+    J_tgt = (J_tgt - dxdy_mean_batch)/dxdy_std_batch
+    J_dec = (J_dec - dxdy_mean_batch)/dxdy_std_batch
 
     j_loss = torch.mean((J_tgt.detach()-J_dec)**2)
     
@@ -299,8 +368,8 @@ def evaluate_dxdy_and_dydx(synth_ae, obs_ae, synth_train_batch, x_mean, x_std,
 
 def train_obs_iter(synth_ae, obs_ae, synth_train_batch, obs_train_batch, x_loss_fn, 
                    loss_weight_x, loss_weight_j, optimizer, lr_scheduler, losses_cp, 
-                   cur_iter, x_mean, x_std, dy_batch, J_mean_batch, J_std_batch, use_cuda,
-                   rec_grads):
+                   cur_iter, x_mean, x_std, dy_batch, dxdy_mean_batch, dxdy_std_batch, 
+                   dydx_mean, dydx_std, use_cuda, rec_grads):
     
     # RUN MODEL
     
@@ -321,26 +390,96 @@ def train_obs_iter(synth_ae, obs_ae, synth_train_batch, obs_train_batch, x_loss_
     
     # Evaluate the dx/dy Jacobians and compare them to the the Jacobian produced by the emulator
     if rec_grads:
-        loss_grads_obs = evaluate_dxdy_and_dydx(synth_ae, obs_ae, synth_train_batch, 
-                                                x_mean, x_std, dy_batch, J_mean_batch, 
-                                                J_std_batch,  use_cuda)
+        loss_dxdy_obs = evaluate_dxdy_obs(synth_ae, obs_ae, synth_train_batch, 
+                                                x_mean, x_std, dy_batch, dxdy_mean_batch, 
+                                                dxdy_std_batch,  use_cuda)
+        loss_dydx_obs = evaluate_dydx_obs(synth_ae, obs_ae, synth_train_batch, 
+                                          x_mean, x_std, dydx_mean, 
+                                          dydx_std,  use_cuda)
     else:
-        loss_grads_obs = torch.tensor(np.array([0]).astype(np.float32))
-    
+        loss_dxdy_obs = torch.tensor(np.array([0]).astype(np.float32))
+        loss_dydx_obs = torch.tensor(np.array([0]).astype(np.float32))
+            
     # Combine losses with appropriate loss weights
     loss_total = (loss_weight_x * xobs_loss +
-                  loss_weight_j * loss_grads_obs)
+                  loss_weight_j * loss_dxdy_obs +
+                  loss_weight_j * loss_dydx_obs)
 
+    
     # Back propogate
     optimizer.zero_grad()
     loss_total.backward()
     # Adjust network weights
-    optimizer.step()    
+    optimizer.step()
     # Adjust learning rate
     lr_scheduler.step()
 
     # Save losses
     losses_cp['x_obs'].append(xobs_loss.data.item())
-    losses_cp['dxdy_obs'].append(loss_grads_obs.data.item())
+    losses_cp['dxdy_obs'].append(loss_dxdy_obs.data.item())
+    losses_cp['dydx_obs'].append(loss_dydx_obs.data.item())
+                      
+    return losses_cp
 
+def train_dydx_iter(synth_ae, obs_ae, synth_train_batch, x_loss_fn, 
+                   loss_weight_x, loss_weight_j, optimizer, lr_scheduler, losses_cp, 
+                   cur_iter, x_mean, x_std, dy_batch, dxdy_mean_batch, dxdy_std_batch, 
+                   dydx_mean, dydx_std, use_cuda, rec_grads):
+    
+    # RUN MODEL
+    
+    obs_ae.train_mode()
+    synth_ae.eval_mode()
+    
+    # Evaluate the dx/dy Jacobians and compare them to the the Jacobian produced by the emulator
+    if rec_grads:
+        loss_dydx_obs = evaluate_dydx_obs(synth_ae, obs_ae, synth_train_batch, 
+                                          x_mean, x_std, dydx_mean, 
+                                          dydx_std,  use_cuda)
+    else:
+        loss_dydx_obs = torch.tensor(np.array([0]).astype(np.float32))
+            
+    # Combine losses with appropriate loss weights
+    loss_total = (loss_weight_j * loss_dydx_obs)
+
+    
+    # Back propogate
+    optimizer.zero_grad()
+    loss_total.backward()
+    # Adjust network weights
+    optimizer.step()
+    # Adjust learning rate
+    lr_scheduler.step()
+
+    # Save losses
+    losses_cp['dydx_obs'].append(loss_dydx_obs.data.item())
+                      
+    return losses_cp
+
+def evaluation_checkpoint(obs_ae, obs_val_set, y_loss_fn, x_loss_fn, losses_cp):
+    # Evaluate validation set
+    obs_ae.eval_mode()
+
+     # Encoding
+    y_obs, z_obs = obs_ae.x_to_yz(obs_val_set['x'].detach())
+    # Decoding
+    x_obsobs = obs_ae.yz_to_xobs(obs_val_set['y'].detach(), z_obs, raw_labels=True)
+
+    # EVALUATE LOSSES
+    
+    # Targets for y_obs
+    y_tgt = (obs_val_set['y'] - obs_ae.y_min)/(obs_ae.y_max - obs_ae.y_min) - 0.5
+    
+    # x to y
+    y_loss = y_loss_fn(y_obs, y_tgt)
+    # y to x
+    xobs_loss = x_loss_fn(pred=x_obsobs, 
+                          target=obs_val_set['x'], 
+                          error=obs_val_set['x_err'], 
+                          mask=obs_val_set['x_msk'])
+
+    # Save losses
+    losses_cp['y_obs_val'].append(y_loss.data.item())
+    losses_cp['x_obs_val'].append(xobs_loss.data.item())
+    
     return losses_cp

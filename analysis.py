@@ -7,7 +7,7 @@ import matplotlib.cm as cmx
 import matplotlib.colors as colors
 import matplotlib.patheffects as pe
 
-plt.rc('text', usetex=True)
+#plt.rc('text', usetex=True)
 plt.rc('font', family='serif')
 
 def plot_progress_synth(losses, y_lims=[(0,0.05),(0,15),(0,0.13)], savename=None):
@@ -37,7 +37,7 @@ def plot_progress_synth(losses, y_lims=[(0,0.05),(0,15),(0,0.13)], savename=None
     ax2.set_ylim(*y_lims[1])
     
     ax3.plot(losses['batch_iters'], losses['dxdy_synth'],
-             label=r'$\frac{\partial \mathcal{X}_{synth\rightarrow synth}}{\partial y_i}$')
+             label=r'$\frac{\partial \mathcal{X}}{\partial y_i}$')
     ax3.set_ylim(*y_lims[2])
 
     for i, ax in enumerate([ax1, ax2, ax3]):
@@ -64,21 +64,31 @@ def plot_progress_obs(losses, y_lims=[(0,0.05),(0,15),(0,0.13)], savename=None):
     ax3 = plt.subplot(gs[2])
 
     ax1.set_title('Reconstruction Losses', fontsize=30)
+    ax2.set_title('Regression Losses', fontsize=30)
     ax3.set_title('Jacobian Losses', fontsize=30)
 
     ax1.plot(losses['batch_iters'], losses['x_obs'],
-             label=r'$x=Dec(Enc(x))$')
+             label=r'$x=Dec(Enc(x))$ (train)')
+    ax1.plot(losses['batch_iters'], losses['x_obs_val'],
+             label=r'$x=Dec(y)$ (val)')
     ax1.set_ylabel('Loss',fontsize=25)
     ax1.set_ylim(*y_lims[0])
     
+    ax2.plot(losses['batch_iters'], losses['y_obs_val'],
+             label=r'$y=Enc(x)$ (val)')
+    ax2.set_ylabel('Loss',fontsize=25)
+    ax2.set_ylim(*y_lims[1])
+    
     ax3.plot(losses['batch_iters'], losses['dxdy_obs'],
-             label=r'$\frac{\partial \mathcal{X}_{obs\rightarrow synth}}{\partial y_i}$')
+             label=r'$\frac{\partial \mathcal{X}}{\partial y_i}$')
+    ax3.plot(losses['batch_iters'], losses['dydx_obs'],
+             label=r'$\frac{\partial \mathcal{Y}}{\partial x_i}$')
     ax3.set_ylim(*y_lims[2])
 
-    for i, ax in enumerate([ax1, ax3]):
+    for i, ax in enumerate([ax1, ax2, ax3]):
         ax.set_xlabel('Batch Iterations',fontsize=25)
         ax.tick_params(labelsize=20)
-        ax.legend(fontsize=22, ncol=2)
+        ax.legend(fontsize=22, ncol=1)
         ax.grid(True)
 
     plt.tight_layout()
@@ -203,30 +213,23 @@ def plot_compare_estimates_resid_obs(x_data, y_data, snr, savename=None,
     
         y_a = resid_a[:,i][(resid_a[:,i]>=xmin)&(resid_a[:,i]<=xmax)]
         y_b = resid_b[:,i][(resid_b[:,i]>=xmin)&(resid_b[:,i]<=xmax)]
+        if len(y_a)>5:
+            a = sns.distplot(y_a, vertical=True, hist=False, rug=False, ax=ax1,
+                             kde_kws={"color": points.cmap(200), "lw": 4})
+            a.set_ylim(resid_lims[i])
+        if len(y_b)>5:
+            b = sns.distplot(y_b,vertical=True,hist=False, rug=False, ax=ax1,
+                             kde_kws={"color": points.cmap(100), "lw": 4})
+            b.set_ylim(resid_lims[i])   
 
-        a = sns.distplot(y_a, vertical=True, hist=False, rug=False, ax=ax1,
-                         kde_kws={"color": points.cmap(200), "lw": 4})
-        b = sns.distplot(y_b,vertical=True,hist=False, rug=False, ax=ax1,
-                         kde_kws={"color": points.cmap(100), "lw": 4})
-
-        a.set_ylim(resid_lims[i])
-        b.set_ylim(resid_lims[i])
-
-        ax1.tick_params(
-        axis='x',          
-        which='both',     
-        bottom=False,      
-        top=False,         
-        labelbottom=False,width=1,length=10)
-
-        ax1.tick_params(
-        axis='y',          
-        which='both',   
-        left=False,     
-        right=True,        
-        labelleft=False,
-        labelright=True,
-        labelsize=40,width=1,length=10)
+        ax1.tick_params(which='both',   
+                        left=False,     
+                        right=True,        
+                        labelleft=False,
+                        labelright=True,
+                        bottom=False,      
+                        top=False, 
+                        labelsize=40,width=1,length=10)
         ax1.xaxis.set_ticks([])
         ax1.yaxis.set_ticks(yticks)
 
