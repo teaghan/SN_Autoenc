@@ -8,9 +8,9 @@ import configparser
 import torch
 from torch.utils.data import DataLoader
 
-from training_fns_new2 import (parseArguments, weighted_masked_mse_loss, PayneObservedDataset,
+from training_fns import (parseArguments, weighted_masked_mse_loss, PayneObservedDataset,
                           create_synth_batch, batch_to_cuda, train_obs_iter, evaluation_checkpoint)
-from network_new import SN_AE
+from network import SN_AE
 
 np.random.seed(1)
 torch.manual_seed(1)

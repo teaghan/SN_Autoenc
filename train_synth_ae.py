@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 
 from training_fns import (parseArguments, weighted_masked_mse_loss, 
                           create_synth_batch, batch_to_cuda, train_synth_iter)
-from network_new import SN_AE
+from network import SN_AE
 
 np.random.seed(1)
 torch.manual_seed(1)
