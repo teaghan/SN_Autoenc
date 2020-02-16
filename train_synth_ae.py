@@ -72,7 +72,7 @@ learning_rate_encoder = float(config['TRAINING']['learning_rate_encoder'])
 learning_rate_decoder = float(config['TRAINING']['learning_rate_decoder'])
 loss_weight_x = float(config['TRAINING']['loss_weight_x_synth'])
 loss_weight_y = float(config['TRAINING']['loss_weight_y'])
-loss_weight_j = float(config['TRAINING']['loss_weight_j_synth'])
+loss_weight_dxdy = float(config['TRAINING']['loss_weight_dxdy_synth'])
 total_synth_batch_iters = float(config['TRAINING']['total_synth_batch_iters'])
 total_obs_batch_iters = float(config['TRAINING']['total_obs_batch_iters'])
 lr_decay_batch_iters = eval(config['TRAINING']['lr_decay_batch_iters'])
@@ -197,7 +197,7 @@ def train_network(cur_iter):
 
         # Train an iteration
         losses_cp = train_synth_iter(synth_ae, synth_train_batch, x_loss_fn, y_loss_fn, 
-                                     loss_weight_x, loss_weight_y, loss_weight_j, 
+                                     loss_weight_x, loss_weight_y, loss_weight_dxdy, 
                                      optimizer, lr_scheduler, losses_cp, cur_iter, 
                                      x_mean, x_std, dy_batch, dxdy_mean_batch, dxdy_std_batch, use_cuda,
                                      rec_grads=True)

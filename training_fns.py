@@ -200,7 +200,7 @@ def evaluate_dxdy(synth_ae, synth_train_batch, x_mean, x_std,
     return j_loss
         
 def train_synth_iter(synth_ae, synth_train_batch, x_loss_fn, y_loss_fn, 
-                     loss_weight_x, loss_weight_y, loss_weight_j, 
+                     loss_weight_x, loss_weight_y, loss_weight_dxdy, 
                      optimizer, lr_scheduler, losses_cp, cur_iter, 
                      x_mean, x_std, dy_batch, dxdy_mean_batch, dxdy_std_batch, use_cuda,
                     rec_grads):
@@ -241,7 +241,7 @@ def train_synth_iter(synth_ae, synth_train_batch, x_loss_fn, y_loss_fn,
     loss_total = (loss_weight_y * y_loss + 
                   loss_weight_y * z_loss +
                   loss_weight_x * xsynth_loss +
-                  loss_weight_j * loss_grads_synth)
+                  loss_weight_dxdy * loss_grads_synth)
 
     # Back propogate
     optimizer.zero_grad()
@@ -367,7 +367,7 @@ def evaluate_dxdy_obs(synth_ae, obs_ae, synth_train_batch, x_mean, x_std,
     return j_loss
 
 def train_obs_iter(synth_ae, obs_ae, synth_train_batch, obs_train_batch, x_loss_fn, 
-                   loss_weight_x, loss_weight_j, optimizer, lr_scheduler, losses_cp, 
+                   loss_weight_x, loss_weight_dxdy, loss_weight_dydx, optimizer, lr_scheduler, losses_cp, 
                    cur_iter, x_mean, x_std, dy_batch, dxdy_mean_batch, dxdy_std_batch, 
                    dydx_mean, dydx_std, use_cuda, rec_grads):
     
@@ -402,8 +402,8 @@ def train_obs_iter(synth_ae, obs_ae, synth_train_batch, obs_train_batch, x_loss_
             
     # Combine losses with appropriate loss weights
     loss_total = (loss_weight_x * xobs_loss +
-                  loss_weight_j * loss_dxdy_obs +
-                  loss_weight_j * loss_dydx_obs)
+                  loss_weight_dxdy * loss_dxdy_obs +
+                  loss_weight_dydx * loss_dydx_obs)
 
     
     # Back propogate
